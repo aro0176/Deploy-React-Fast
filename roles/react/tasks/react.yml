@@ -1,0 +1,74 @@
+---
+
+ - name: Création Dossier pour l'application
+   file:
+     path: "{{ dossier_perso }}"
+     state: directory
+     owner: "{{ utilisateur }}"
+     group: "{{ utilisateur }}"
+     mode: 0755
+
+ - name: Création Dossier dans WWW
+   become: yes
+   file:
+     path: "{{ dossier_www }}"
+     state: directory
+     owner: "{{ utilisateur }}"
+     group: "{{ utilisateur }}"
+     mode: 0755
+
+ - name: Clonez l'application ReactJS
+   git:
+     repo: "{{ lien_git_react }}"
+     dest: "{{ dossier_perso }}"
+
+ - name: Installation dependances ReactJS
+   shell: npm install && export NODE_OPTIONS="--max-old-space-size=8000"
+   args:
+     chdir: "{{ dossier_perso }}"
+
+ - name: Installation des dependances manquantes
+   shell: npm install --save-dev @babel/plugin-proposal-private-property-in-object && npm cache clean --force
+   args:
+     chdir: "{{ dossier_perso }}"
+
+ - name: Ajouter l'API back dans package.json
+   lineinfile:
+     path: "{{ chemin_json }}"
+     regexp: '^\\s*"proxy":.*'
+     line: '    "proxy": "{{ api_name }}",'
+     
+ - name: Build application ReactJS
+   shell: export NODE_OPTIONS="--max-old-space-size=8000" && npm run build
+   args:
+     chdir: "{{ dossier_perso }}"
+
+ - name: Copie build dans le www
+   copy: 
+     src: "{{ dossier_perso }}/build"
+     dest: "{{ dossier_www }}"
+     remote_src: yes
+
+ - name: Configuration Apache
+   become: yes
+   template:
+     src: deployReact.conf.j2
+     dest: /etc/apache2/sites-available/{{ config_apache }}
+   notify: restart apache  
+
+ - become: yes
+   command: a2enmod rewrite
+ 
+ - name: personnalisations spécifiques du react
+   template:
+     src: htaccess.j2
+     dest: "{{ dossier_www }}/build/.htaccess"
+   notify: restart apache
+
+ - name: Activer le site apache
+   become: yes
+   shell: "a2ensite {{ config_apache }}"
+   args:
+     warn: no
+   notify: restart apache
+...

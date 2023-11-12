@@ -1,0 +1,80 @@
+---
+ - name: Création Dossier Backend
+   become: yes
+   file:
+     path: "{{ Dossier_back }}"
+     state: directory
+     owner: "{{ utilisateur }}"
+     group: "{{ utilisateur }}"
+     mode: 0755
+
+ - name: Clonez l'API backend
+   git:
+     repo: "{{ lien_git }}"
+     dest: "{{ Dossier_back }}"
+
+ - name: Création environnement
+   shell: python3 -m venv "{{ Dossier_back }}/venv"
+   args:
+     chdir: "{{ Dossier_back }}"
+
+ - name: Modifier le repertoire environnement
+   become: yes
+   shell: "chmod -R a+rwX {{ Dossier_back }}/venv"
+   args:
+     chdir: "{{ Dossier_back }}"
+
+ - name: Activation environnement et installation dependance
+   shell: . {{ Dossier_back }}/venv/bin/activate && pip3 install -r requirements.txt
+   args:
+     chdir: "{{ Dossier_back }}"
+
+ - name: Configuration Postgresql connection
+   lineinfile:
+     path: "{{ chemin_py }}"
+     regexp: "^SQLALCHEMY_DATABASE_URL"
+     line: "SQLALCHEMY_DATABASE_URL = 'postgresql://{{ user_data }}:{{ mdp_data }}@{{ addr_data }}:5432/{{ table_data }}'"
+
+ - name: Création Service
+   become: yes
+   template:
+     src: myapp.service.j2
+     dest: /etc/systemd/system/{{ config_service }}
+
+ - name: Redémarrer daemon
+   become: yes
+   command: systemctl daemon-reload
+
+ - name: Activation service
+   become: yes
+   shell: systemctl enable {{ config_service }}
+
+ - name: "Start service {{ config_service }}"
+   become: yes
+   service:
+     name: "{{ config_service }}"
+     state: started
+   notify: restart Service
+
+ - name: Configuration Virtual Host pour FatsApi
+   become: yes
+   template:
+     src: deployFast.conf.j2
+     dest: /etc/apache2/sites-available/{{ config_apache }}
+   
+ - name: Active module proxy
+   become: yes
+   command: a2enmod proxy
+   notify: restart Service
+
+ - name: Active module proxy http
+   become: yes
+   command: a2enmod proxy_http
+
+ - name: Active virtuel host
+   become: yes
+   command: "a2ensite {{ config_apache }}"
+   args:
+     warn: no
+   notify: restart Apache
+...

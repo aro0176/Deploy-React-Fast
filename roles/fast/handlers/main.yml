@@ -1,0 +1,13 @@
+---
+ - name: restart Apache
+   become: yes
+   service:
+     name: apache2
+     state: restarted
+
+ - name: restart Service
+   become: yes
+   service:
+     name: "{{ config_service }}"
+     state: restarted
+...
